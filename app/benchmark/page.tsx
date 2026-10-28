@@ -3,6 +3,7 @@ import { HeadToHead } from '@/components/benchmark/head-to-head'
 import { JudgmentPanel } from '@/components/benchmark/judgment-panel'
 import { MetricsTable } from '@/components/benchmark/metrics-table'
 import { TrainingPanel } from '@/components/benchmark/training-panel'
+import annCheck from '@/lib/patents/ann-check.json'
 import { getJudgmentSummary, getLatestRun } from '@/lib/patents/report'
 
 export const dynamic = 'force-dynamic'
@@ -82,6 +83,14 @@ export default async function BenchmarkPage() {
           <li>
             <span className="text-foreground">Tuning.</span> Early stopping, λ and the disclosure threshold are chosen
             on validation only; the test split is scored once with frozen settings.
+          </li>
+          <li>
+            <span className="text-foreground">Retrieval index.</span> The live search uses a pgvector HNSW index (m =
+            16, ef_search = 200). On the {annCheck.queries} test claims it returns{' '}
+            <span className="font-mono text-foreground">{(annCheck.adapted.recall * 100).toFixed(1)}%</span> of the
+            exact top-{annCheck.k} for adapted vectors and{' '}
+            <span className="font-mono text-foreground">{(annCheck.base.recall * 100).toFixed(1)}%</span> for base
+            vectors, so the scores above, computed by exact search, carry over to the app.
           </li>
           <li>
             <span className="text-foreground">Caveat.</span> The corpus is the union of cited documents, so every

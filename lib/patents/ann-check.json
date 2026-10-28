@@ -1,0 +1,16 @@
+{
+  "k": 100,
+  "queries": 370,
+  "usesIndex": true,
+  "index": "hnsw m=16 ef_construction=128 ef_search=200",
+  "base": {
+    "recall": 0.9939,
+    "annMs": 254,
+    "exactMs": 290
+  },
+  "adapted": {
+    "recall": 0.9955,
+    "annMs": 253,
+    "exactMs": 280
+  }
+}

@@ -48,15 +48,37 @@ export async function keywordSearch(claim: string, k: number) {
   return rows.map((r) => ({ docId: r.doc_id, score: Number(r.score) }))
 }
 
-export async function denseSearch(vec: Float32Array, mode: 'base' | 'adapted', k: number) {
+/**
+ * Nearest-neighbour search over document vectors through the HNSW index.
+ * ef_search must exceed k, otherwise pgvector returns at most ef_search rows (default 40).
+ * `exact` disables index scans so ANN recall can be measured against brute force.
+ */
+export async function denseSearch(
+  vec: Float32Array,
+  mode: 'base' | 'adapted',
+  k: number,
+  { exact = false }: { exact?: boolean } = {},
+) {
   const col = DENSE_COLUMN[mode]
-  const { rows } = await pool.query<{ doc_id: string; score: number }>(
-    `SELECT doc_id, (1 - (${col} <=> $1::vector))::float8 AS score
-     FROM documents WHERE ${col} IS NOT NULL
-     ORDER BY ${col} <=> $1::vector LIMIT $2`,
-    [toPgVector(vec), k],
-  )
-  return rows.map((r) => ({ docId: r.doc_id, score: Number(r.score) }))
+  const efSearch = Math.min(1000, Math.max(100, k * 2))
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    if (exact) await client.query('SET LOCAL enable_indexscan = off')
+    else await client.query(`SET LOCAL hnsw.ef_search = ${efSearch}`)
+    const { rows } = await client.query<{ doc_id: string; score: number }>(
+      `SELECT doc_id, (1 - (${col} <=> $1::vector))::float8 AS score
+       FROM documents ORDER BY ${col} <=> $1::vector LIMIT $2`,
+      [toPgVector(vec), k],
+    )
+    await client.query('COMMIT')
+    return rows.map((r) => ({ docId: r.doc_id, score: Number(r.score) }))
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
 }
 
 export async function searchClaim(
