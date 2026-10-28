@@ -1,6 +1,6 @@
 {
-  "lambda": 0.3,
+  "lambda": 0.45,
   "depth": 100,
-  "coverThreshold": 0.5,
-  "tunedOn": null
+  "coverThreshold": 0.55,
+  "tunedOn": "val (164 queries)"
 }

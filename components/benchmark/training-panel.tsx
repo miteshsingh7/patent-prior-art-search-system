@@ -10,16 +10,25 @@ function Sparkline({ values, best }: { values: number[]; best: number }) {
   const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - 4 - ((v - min) / span) * (h - 8)])
   const bi = Math.max(0, best)
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-14 w-full" role="img" aria-label="Validation Recall@100 by epoch">
-      <polyline
-        points={pts.map((p) => p.join(',')).join(' ')}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        className="text-primary"
-      />
-      {pts[bi] && <circle cx={pts[bi][0]} cy={pts[bi][1]} r="3" className="fill-primary" />}
-    </svg>
+    <div className="relative h-14 w-full" role="img" aria-label="Validation Recall@100 by epoch">
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="size-full" aria-hidden="true">
+        <polyline
+          points={pts.map((p) => p.join(',')).join(' ')}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          vectorEffect="non-scaling-stroke"
+          className="text-primary"
+        />
+      </svg>
+      {pts[bi] && (
+        <span
+          aria-hidden="true"
+          className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary"
+          style={{ left: `${(pts[bi][0] / w) * 100}%`, top: `${(pts[bi][1] / h) * 100}%` }}
+        />
+      )}
+    </div>
   )
 }
 
@@ -27,6 +36,8 @@ export function TrainingPanel({ run }: { run: EvalRun }) {
   const meta = run.config.adapter
   const sweep = run.results.lambdaSweep
   const maxNdcg = Math.max(...sweep.map((s) => s.ndcg10), 1e-9)
+  const minNdcg = Math.min(...sweep.map((s) => s.ndcg10))
+  const floor = Math.max(0, minNdcg - (maxNdcg - minNdcg || 0.01))
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -72,7 +83,7 @@ export function TrainingPanel({ run }: { run: EvalRun }) {
               key={s.lambda}
               title={`λ ${s.lambda}: nDCG@10 ${s.ndcg10.toFixed(3)}`}
               className={s.lambda === run.config.lambda ? 'flex-1 rounded-t-sm bg-primary' : 'flex-1 rounded-t-sm bg-muted'}
-              style={{ height: `${(s.ndcg10 / maxNdcg) * 100}%` }}
+              style={{ height: `${((s.ndcg10 - floor) / (maxNdcg - floor || 1)) * 100}%` }}
             />
           ))}
         </div>
@@ -81,8 +92,9 @@ export function TrainingPanel({ run }: { run: EvalRun }) {
           <span>{sweep.at(-1)?.lambda}</span>
         </div>
         <p className="text-xs leading-relaxed text-muted-foreground">
-          score = (1 − λ)·similarity + λ·element coverage. Chosen λ ={' '}
-          <span className="font-mono text-foreground">{run.config.lambda}</span> on {run.config.tunedOn}; an element
+          score = (1 − λ)·similarity + λ·element coverage. Bars show validation nDCG@10; λ ={' '}
+          <span className="font-mono text-foreground">{run.config.lambda}</span> maximises nDCG@10 + Recall@10 on{' '}
+          {run.config.tunedOn}. An element
           counts as disclosed at similarity ≥ <span className="font-mono text-foreground">{run.config.coverThreshold}</span>.
         </p>
       </div>

@@ -22,9 +22,9 @@ export async function POST(req: Request) {
   const { rows } = await pool.query<{ exists: boolean }>(`SELECT EXISTS (SELECT 1 FROM documents WHERE doc_id = $1)`, [docId])
   if (!rows[0]?.exists) return NextResponse.json({ error: 'Unknown document' }, { status: 404 })
 
-  await pool.query(`DELETE FROM judgments WHERE query_hash = $1 AND candidate = $2`, [hash, docId])
   await pool.query(
-    `INSERT INTO judgments (query_hash, query_excerpt, candidate, grade, rank) VALUES ($1, $2, $3, $4, $5)`,
+    `WITH removed AS (DELETE FROM judgments WHERE query_hash = $1 AND candidate = $3)
+     INSERT INTO judgments (query_hash, query_excerpt, candidate, grade, rank) VALUES ($1, $2, $3, $4, $5)`,
     [hash, claim.slice(0, 240), docId, grade, rank],
   )
   return NextResponse.json({ ok: true })

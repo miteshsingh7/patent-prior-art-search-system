@@ -24,7 +24,8 @@ export function JudgmentPanel({ summary }: { summary: JudgmentSummary }) {
       <div className="flex flex-col gap-1">
         <h3 className="text-sm font-medium">Examiner-judged relevance</h3>
         <p className="text-xs text-muted-foreground">
-          {summary.total} candidates judged across {summary.claims} claims · X {summary.byGrade[2]} · A{' '}
+          {summary.total} {summary.total === 1 ? 'candidate' : 'candidates'} judged across {summary.claims}{' '}
+        {summary.claims === 1 ? 'claim' : 'claims'} · X {summary.byGrade[2]} · A{' '}
           {summary.byGrade[1]} · not relevant {summary.byGrade[0]}
         </p>
       </div>
