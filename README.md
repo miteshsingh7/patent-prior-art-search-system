@@ -5,7 +5,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v
 
 ## Getting Started
 
-live link - https://patent-prior-art-search-system-mm0jy17gv-mitesh3.vercel.app/
+live link - https://patent-prior-art-search-system.vercel.app/
 
 First, run the development server:
 
