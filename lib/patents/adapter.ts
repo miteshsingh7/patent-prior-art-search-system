@@ -12,8 +12,14 @@ export type AdapterMeta = {
   temperature: number
   identityPenalty: number
   lossCurve: number[]
-  validation: { baseRecall50: number; adaptedRecall50: number; queries: number }
-  rerankLambda: number
+  valCurve: { epoch: number; recall100: number; ndcg10: number }[]
+  validation: {
+    queries: number
+    baseRecall100: number
+    adaptedRecall100: number
+    baseNdcg10: number
+    adaptedNdcg10: number
+  }
 }
 
 export type AdapterFile = { dim: number; weights: string; meta: AdapterMeta }

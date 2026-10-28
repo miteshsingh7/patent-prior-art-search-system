@@ -20,17 +20,24 @@ async function getExtractor() {
   return extractorPromise
 }
 
-/** Mean-pooled, L2-normalised sentence embeddings from the base encoder. */
+const MAX_CHARS = 1400
+
+/**
+ * Mean-pooled, L2-normalised sentence embeddings from the base encoder.
+ * Inputs are batched in length order so padding stays small, then returned in input order.
+ */
 export async function embedBase(texts: string[], batchSize = 32): Promise<Float32Array[]> {
   const extractor = await getExtractor()
-  const out: Float32Array[] = []
-  for (let i = 0; i < texts.length; i += batchSize) {
-    const batch = texts.slice(i, i + batchSize)
+  const order = texts.map((_, i) => i).sort((a, b) => texts[a].length - texts[b].length)
+  const out = new Array<Float32Array>(texts.length)
+  for (let i = 0; i < order.length; i += batchSize) {
+    const idx = order.slice(i, i + batchSize)
+    const batch = idx.map((k) => texts[k].slice(0, MAX_CHARS))
     const tensor = await extractor(batch, { pooling: 'mean', normalize: true })
     const data = tensor.data as Float32Array
-    for (let j = 0; j < batch.length; j++) {
-      out.push(data.slice(j * EMBED_DIM, (j + 1) * EMBED_DIM))
-    }
+    idx.forEach((k, j) => {
+      out[k] = data.slice(j * EMBED_DIM, (j + 1) * EMBED_DIM)
+    })
   }
   return out
 }

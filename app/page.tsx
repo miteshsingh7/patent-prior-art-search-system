@@ -1,47 +1,29 @@
-export default function Page() {
+import { pool } from '@/lib/db'
+import { SearchWorkbench } from '@/components/search/search-workbench'
+
+export const dynamic = 'force-dynamic'
+
+async function getCorpus() {
+  const { rows } = await pool.query<{ docs: number; passages: number }>(
+    `SELECT (SELECT count(*) FROM documents)::int AS docs, (SELECT count(*) FROM passages)::int AS passages`,
+  )
+  return rows[0] ?? { docs: 0, passages: 0 }
+}
+
+export default async function Page() {
+  const corpus = await getCorpus()
   return (
-    <main
-      style={{
-        colorScheme: 'light dark',
-        position: 'relative',
-        display: 'flex',
-        minHeight: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'light-dark(#fff, #000)',
-        color: 'light-dark(#000, #fff)',
-      }}
-    >
-      <svg
-        aria-hidden="true"
-        style={{ width: 80, height: 80 }}
-        width={80}
-        height={80}
-        fill="none"
-        viewBox="0 0 20 20"
-        xmlns="http://www.w3.org/2000/svg"
-        stroke="currentColor"
-        strokeWidth="0.5"
-      >
-        <path
-          d="M14.2 14.2H17V6.9375C17 4.76288 15.2371 3 13.0625 3H5.8V5.8M14.2 14.2V7.79063L7.79062 14.2H14.2ZM14.2 14.2V17H6.9375C4.76288 17 3 15.2371 3 13.0625V5.8H5.8M5.8 5.8V12.2313L12.2313 5.8H5.8Z"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <p
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: 'calc(50% + 56px)',
-          transform: 'translateX(-50%)',
-          whiteSpace: 'nowrap',
-          fontSize: '14px',
-          fontWeight: 500,
-          color: 'light-dark(#71717a, #a1a1aa)',
-        }}
-      >
-        Your v0 generation will show here.
-      </p>
+    <main className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 md:px-6 md:py-10">
+      <div className="flex max-w-3xl flex-col gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-balance md:text-3xl">
+          Semantic prior-art search for patent claims
+        </h1>
+        <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
+          Retrieval by conceptual similarity rather than shared keywords, with an element-by-element claim chart for
+          every candidate. Corpus: {corpus.docs.toLocaleString()} documents cited in EPO search reports.
+        </p>
+      </div>
+      <SearchWorkbench corpus={corpus} />
     </main>
   )
 }

@@ -1,6 +1,4 @@
 import {
-  boolean,
-  date,
   integer,
   jsonb,
   pgTable,
@@ -12,54 +10,42 @@ import {
   vector,
 } from 'drizzle-orm/pg-core'
 
-export type IndependentClaim = {
-  number: number
-  text: string
-  elements: string[]
-}
-
-export const patents = pgTable('patents', {
-  pubNumber: text('pub_number').primaryKey(),
-  title: text('title').notNull(),
-  abstract: text('abstract'),
-  assignee: text('assignee'),
-  priorityDate: date('priority_date'),
-  publicationDate: date('publication_date'),
-  cpc: text('cpc').array().notNull().default([]),
-  firstClaim: text('first_claim'),
-  independentClaims: jsonb('independent_claims')
-    .$type<IndependentClaim[]>()
-    .notNull()
-    .default([]),
-  role: text('role').notNull().default('corpus'),
+/** Prior-art corpus: every document an EPO examiner cited, represented by its cited passages. */
+export const documents = pgTable('documents', {
+  docId: text('doc_id').primaryKey(),
+  preview: text('preview').notNull(),
+  fullText: text('full_text').notNull(),
+  nPassages: integer('n_passages').notNull(),
   embeddingBase: vector('embedding_base', { dimensions: 384 }),
   embeddingAdapted: vector('embedding_adapted', { dimensions: 384 }),
-  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-export const claimElements = pgTable('claim_elements', {
+export const passages = pgTable('passages', {
   id: serial('id').primaryKey(),
-  pubNumber: text('pub_number').notNull(),
-  claimNo: integer('claim_no').notNull(),
-  elementIdx: integer('element_idx').notNull(),
+  docId: text('doc_id').notNull(),
+  idx: integer('idx').notNull(),
   text: text('text').notNull(),
   embedding: vector('embedding', { dimensions: 384 }),
 })
 
-export const citations = pgTable(
-  'citations',
-  {
-    citing: text('citing').notNull(),
-    cited: text('cited').notNull(),
-    examinerCited: boolean('examiner_cited').notNull().default(false),
-  },
-  (t) => [primaryKey({ columns: [t.citing, t.cited] })],
-)
-
-export const evalTargets = pgTable('eval_targets', {
-  pubNumber: text('pub_number').primaryKey(),
+/** One independent claim per EP application (the search target). */
+export const queries = pgTable('queries', {
+  appId: text('app_id').primaryKey(),
+  claim: text('claim').notNull(),
+  appDate: text('app_date'),
   split: text('split').notNull(),
 })
+
+/** Examiner citations from the search report: grade 2 = X (novelty-destroying), 1 = A (background). */
+export const qrels = pgTable(
+  'qrels',
+  {
+    appId: text('app_id').notNull(),
+    docId: text('doc_id').notNull(),
+    grade: smallint('grade').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.appId, t.docId] })],
+)
 
 export const evalRuns = pgTable('eval_runs', {
   id: serial('id').primaryKey(),

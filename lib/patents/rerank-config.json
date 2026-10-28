@@ -1,0 +1,6 @@
+{
+  "lambda": 0.3,
+  "depth": 100,
+  "coverThreshold": 0.5,
+  "tunedOn": null
+}

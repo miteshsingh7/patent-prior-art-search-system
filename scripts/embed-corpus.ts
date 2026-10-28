@@ -1,60 +1,70 @@
 /**
- * Computes base-encoder embeddings for every patent (doc vector = mean of the
- * title+abstract and first-claim embeddings) and for every claim element.
+ * Embeds every passage with the base encoder (resumable: only rows with NULL embedding),
+ * then sets each document's base embedding to the normalised mean of its passages.
  *
- * Run: pnpm tsx --env-file=.env.development.local scripts/embed-corpus.ts
+ * Run: pnpm tsx --env-file=.env.development.local scripts/embed-corpus.ts [shard] [shards]
  */
-import { sql } from 'drizzle-orm'
-import { db, pool } from '@/lib/db'
-import { claimElements, type IndependentClaim } from '@/lib/db/schema'
-import { docEmbeddingText } from '@/lib/patents/adapter'
+import { pool } from '@/lib/db'
 import { embedBase } from '@/lib/patents/embed'
-import { l2normalize, mean, toPgVector } from '@/lib/patents/vector'
+import { fromPgVector, l2normalize, mean, toPgVector } from '@/lib/patents/vector'
 
-type Row = {
-  pub_number: string
-  title: string
-  abstract: string | null
-  first_claim: string | null
-  independent_claims: IndependentClaim[]
+const shard = Number(process.argv[2] ?? 0)
+const shards = Number(process.argv[3] ?? 1)
+const PAGE = 1024
+
+async function embedPassages() {
+  const { rows: count } = await pool.query<{ n: string }>(
+    `SELECT count(*) n FROM passages WHERE embedding IS NULL AND id % $1 = $2`,
+    [shards, shard],
+  )
+  const total = Number(count[0].n)
+  let done = 0
+  const started = Date.now()
+  for (;;) {
+    const { rows } = await pool.query<{ id: number; text: string }>(
+      `SELECT id, text FROM passages WHERE embedding IS NULL AND id % $1 = $2 ORDER BY id LIMIT $3`,
+      [shards, shard, PAGE],
+    )
+    if (!rows.length) break
+    const vecs = await embedBase(rows.map((r) => r.text))
+    await pool.query(
+      `UPDATE passages p SET embedding = v.e::vector
+       FROM unnest($1::int[], $2::text[]) AS v(id, e) WHERE p.id = v.id`,
+      [rows.map((r) => r.id), vecs.map(toPgVector)],
+    )
+    done += rows.length
+    const rate = done / ((Date.now() - started) / 1000)
+    console.log(`[shard ${shard}] ${done}/${total} passages, ${rate.toFixed(1)}/s, eta ${((total - done) / rate / 60).toFixed(1)} min`)
+  }
+}
+
+async function poolDocuments() {
+  const { rows } = await pool.query<{ doc_id: string; embedding: string }>(
+    `SELECT doc_id, embedding::text FROM passages WHERE embedding IS NOT NULL ORDER BY doc_id, idx`,
+  )
+  const byDoc = new Map<string, Float32Array[]>()
+  for (const r of rows) {
+    if (!byDoc.has(r.doc_id)) byDoc.set(r.doc_id, [])
+    byDoc.get(r.doc_id)!.push(fromPgVector(r.embedding))
+  }
+  const ids = [...byDoc.keys()]
+  for (let i = 0; i < ids.length; i += 500) {
+    const chunk = ids.slice(i, i + 500)
+    await pool.query(
+      `UPDATE documents d SET embedding_base = v.e::vector, embedding_adapted = v.e::vector
+       FROM unnest($1::text[], $2::text[]) AS v(id, e) WHERE d.doc_id = v.id`,
+      [chunk, chunk.map((id) => toPgVector(l2normalize(mean(byDoc.get(id)!))))],
+    )
+  }
+  console.log(`pooled ${ids.length} document embeddings`)
 }
 
 async function main() {
-  const { rows } = await pool.query<Row>(
-    `SELECT pub_number, title, abstract, first_claim, independent_claims
-     FROM patents WHERE embedding_base IS NULL`,
-  )
-  console.log(`embedding ${rows.length} patents`)
-
-  for (let start = 0; start < rows.length; start += 64) {
-    const batch = rows.slice(start, start + 64)
-    const meta = await embedBase(batch.map(docEmbeddingText))
-    const claims = await embedBase(batch.map((r) => r.first_claim ?? r.title))
-
-    for (let i = 0; i < batch.length; i++) {
-      const r = batch[i]
-      const vec = r.first_claim ? l2normalize(mean([meta[i], claims[i]])) : meta[i]
-      await db.execute(
-        sql`UPDATE patents SET embedding_base = ${toPgVector(vec)}::vector WHERE pub_number = ${r.pub_number}`,
-      )
-
-      const elements = r.independent_claims.flatMap((c) =>
-        c.elements.map((text, idx) => ({ claimNo: c.number, idx, text })),
-      )
-      if (!elements.length) continue
-      const vecs = await embedBase(elements.map((e) => e.text))
-      await db.delete(claimElements).where(sql`${claimElements.pubNumber} = ${r.pub_number}`)
-      await db.insert(claimElements).values(
-        elements.map((e, j) => ({
-          pubNumber: r.pub_number,
-          claimNo: e.claimNo,
-          elementIdx: e.idx,
-          text: e.text,
-          embedding: Array.from(vecs[j]),
-        })),
-      )
-    }
-    console.log(`  ${Math.min(start + 64, rows.length)}/${rows.length}`)
+  await embedPassages()
+  if (shard === 0) {
+    const { rows } = await pool.query<{ n: string }>(`SELECT count(*) n FROM passages WHERE embedding IS NULL`)
+    if (Number(rows[0].n) === 0) await poolDocuments()
+    else console.log(`${rows[0].n} passages still pending in other shards; rerun shard 0 to pool documents`)
   }
   await pool.end()
 }
