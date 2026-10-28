@@ -8,6 +8,9 @@ let extractorPromise: Promise<FeatureExtractionPipeline> | null = null
 async function getExtractor() {
   if (!extractorPromise) {
     extractorPromise = (async () => {
+      // transformers loads onnxruntime-node via createRequire, which output file tracing cannot follow.
+      // Importing it by name here makes the build bundle the native runtime into the function.
+      await import('onnxruntime-node')
       const { pipeline, env } = await import('@huggingface/transformers')
       env.cacheDir = '/tmp/hf-cache'
       env.allowLocalModels = false
