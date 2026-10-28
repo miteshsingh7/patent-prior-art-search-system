@@ -8,7 +8,11 @@ const nextConfig = {
   },
   serverExternalPackages: ['@huggingface/transformers', 'onnxruntime-node', 'sharp'],
   outputFileTracingIncludes: {
-    '/api/search': ['./lib/patents/adapter.json'],
+    // libonnxruntime.so is loaded by the native binding at runtime, so tracing never sees it.
+    '/api/search': [
+      './lib/patents/adapter.json',
+      './node_modules/.pnpm/onnxruntime-node@*/node_modules/onnxruntime-node/bin/napi-v6/linux/x64/*',
+    ],
     '/benchmark': ['./lib/patents/adapter.json'],
   },
   async headers() {

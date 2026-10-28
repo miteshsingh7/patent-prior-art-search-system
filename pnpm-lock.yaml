@@ -38,6 +38,9 @@ importers:
       node-html-parser:
         specifier: ^9.0.5
         version: 9.0.5
+      onnxruntime-node:
+        specifier: 1.30.0
+        version: 1.30.0
       pg:
         specifier: ^8.23.1
         version: 8.23.1
